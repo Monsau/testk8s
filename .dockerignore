@@ -1,0 +1,9 @@
+k8s/
+argocd/
+.git/
+.gitignore
+README.md
+*.md
+__pycache__/
+*.pyc
+.DS_Store
