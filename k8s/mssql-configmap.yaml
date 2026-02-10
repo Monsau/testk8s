@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mssql-init-script
+  labels:
+    app: mssql
+data:
+  init.sql: |
+    -- Attendre que SQL Server soit prêt
+    WAITFOR DELAY '00:00:05';
+
+    -- Créer la base de données Requests
+    IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'Requests')
+    BEGIN
+        CREATE DATABASE [Requests];
+    END
+    GO
+
+    USE [Requests]
+    GO
+
+    -- Créer le schéma data
+    IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'data')
+    BEGIN
+        EXEC('CREATE SCHEMA [data]');
+    END
+    GO
+
+    -- Créer la table EntityVersion
+    SET ANSI_NULLS ON
+    GO
+
+    SET QUOTED_IDENTIFIER ON
+    GO
+
+    IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[data].[EntityVersion]') AND type in (N'U'))
+    BEGIN
+        CREATE TABLE [data].[EntityVersion](
+            [Id] [int] NOT NULL,
+            [LogicalId] [varchar](50) NOT NULL,
+            [Version] [int] NOT NULL,
+            [Properties] [nvarchar](max) NOT NULL,
+            [ExtensionsData] [nvarchar](max) NULL,
+            [ModifiedUtc] [datetime] NOT NULL,
+            [ModifiedBy] [varchar](250) NULL,
+            [Latest] [bit] NOT NULL,
+        CONSTRAINT [PK_EntityVersion] PRIMARY KEY CLUSTERED 
+        (
+            [Id] ASC,
+            [LogicalId] ASC,
+            [Version] ASC
+        ) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+        ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+    END
+    GO
+
+    -- Insérer des données de démonstration
+    USE [Requests]
+    GO
+
+    IF NOT EXISTS (SELECT TOP 1 1 FROM [data].[EntityVersion])
+    BEGIN
+        INSERT INTO [data].[EntityVersion] ([Id], [LogicalId], [Version], [Properties], [ExtensionsData], [ModifiedUtc], [ModifiedBy], [Latest])
+        VALUES
+        (1, 'REQ-001', 1, '{"type":"Feature","title":"Add login page","status":"New","priority":"High"}', NULL, '2026-01-15 10:30:00', 'alice@example.com', 0),
+        (1, 'REQ-001', 2, '{"type":"Feature","title":"Add login page","status":"InProgress","priority":"High"}', '{"assignee":"bob"}', '2026-01-20 14:00:00', 'bob@example.com', 0),
+        (1, 'REQ-001', 3, '{"type":"Feature","title":"Add login page","status":"Completed","priority":"High"}', '{"assignee":"bob","reviewer":"charlie"}', '2026-02-01 09:15:00', 'bob@example.com', 1),
+        
+        (2, 'REQ-002', 1, '{"type":"Bug","title":"Fix null pointer exception","status":"New","priority":"Critical"}', NULL, '2026-01-18 08:00:00', 'charlie@example.com', 0),
+        (2, 'REQ-002', 2, '{"type":"Bug","title":"Fix null pointer exception","status":"Resolved","priority":"Critical"}', '{"fixedInBuild":"v2.1.3"}', '2026-01-19 16:30:00', 'diana@example.com', 1),
+        
+        (3, 'REQ-003', 1, '{"type":"Feature","title":"Dashboard redesign","status":"New","priority":"Medium"}', NULL, '2026-01-22 11:00:00', 'eve@example.com', 0),
+        (3, 'REQ-003', 2, '{"type":"Feature","title":"Dashboard redesign","status":"InProgress","priority":"Medium"}', '{"assignee":"alice","sprint":"Sprint-5"}', '2026-01-25 13:45:00', 'alice@example.com', 1),
+        
+        (4, 'REQ-004', 1, '{"type":"Task","title":"Update dependencies","status":"New","priority":"Low"}', NULL, '2026-02-01 07:00:00', 'bob@example.com', 1),
+        
+        (5, 'REQ-005', 1, '{"type":"Bug","title":"Slow query on reports page","status":"New","priority":"High"}', NULL, '2026-02-05 09:30:00', 'charlie@example.com', 0),
+        (5, 'REQ-005', 2, '{"type":"Bug","title":"Slow query on reports page","status":"InProgress","priority":"High"}', '{"assignee":"diana","indexAdded":true}', '2026-02-06 10:00:00', 'diana@example.com', 0),
+        (5, 'REQ-005', 3, '{"type":"Bug","title":"Slow query on reports page","status":"Testing","priority":"High"}', '{"assignee":"diana","indexAdded":true,"testPlan":"TP-42"}', '2026-02-08 15:00:00', 'diana@example.com', 1),
+        
+        (6, 'REQ-006', 1, '{"type":"Feature","title":"Export to PDF","status":"New","priority":"Medium"}', NULL, '2026-02-07 12:00:00', 'eve@example.com', 1),
+        
+        (7, 'REQ-007', 1, '{"type":"Task","title":"Setup CI/CD pipeline","status":"New","priority":"High"}', NULL, '2026-02-08 08:00:00', 'alice@example.com', 0),
+        (7, 'REQ-007', 2, '{"type":"Task","title":"Setup CI/CD pipeline","status":"Completed","priority":"High"}', '{"pipelineUrl":"https://ci.example.com/pipeline/7"}', '2026-02-09 17:30:00', 'alice@example.com', 1),
+        
+        (8, 'REQ-008', 1, '{"type":"Bug","title":"Memory leak in worker service","status":"New","priority":"Critical"}', NULL, '2026-02-10 06:00:00', 'bob@example.com', 1);
+    END
+    GO
+
+    PRINT 'Base de données Requests initialisée avec succès!';
+    GO
+
+  entrypoint.sh: |
+    #!/bin/bash
+    # Démarrer SQL Server en arrière-plan
+    /opt/mssql/bin/sqlservr &
+
+    # Attendre que SQL Server soit prêt
+    echo "Attente du démarrage de SQL Server..."
+    sleep 20
+
+    for i in {1..30}; do
+        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            echo "SQL Server est prêt!"
+            break
+        fi
+        echo "Tentative $i/30 - SQL Server pas encore prêt..."
+        sleep 2
+    done
+
+    # Exécuter le script d'initialisation
+    echo "Exécution du script d'initialisation..."
+    /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -C -i /scripts/init.sql
+
+    echo "Initialisation terminée!"
+
+    # Garder le conteneur en vie
+    wait
