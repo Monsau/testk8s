@@ -27,7 +27,34 @@ Base de données PostgreSQL déployée sur Kubernetes avec un script d'initialis
 
 ## 🚀 Déploiement
 
-### 1. Déployer PostgreSQL sur Kubernetes
+### Option A : Avec ArgoCD (GitOps - Recommandé)
+
+```bash
+# 1. Installer ArgoCD (si pas déjà fait)
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# Attendre que tout soit prêt
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n argocd --timeout=300s
+
+# 2. Déployer l'application PostgreSQL via ArgoCD
+kubectl apply -f argocd-app.yaml
+
+# 3. Vérifier dans l'interface ArgoCD
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+# Ouvrir https://localhost:8080
+# Username: admin
+# Password: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+
+**Avantages ArgoCD** :
+- ✅ Synchronisation automatique depuis Git
+- ✅ Détection des changements sur GitHub (toutes les 3 min)
+- ✅ Self-heal : restaure automatiquement les modifications manuelles
+- ✅ Interface graphique pour visualiser le déploiement
+- ✅ Historique et rollback en 1 clic
+
+### Option B : Déploiement manuel avec kubectl
 
 ```bash
 # Déployer tous les composants (dans l'ordre)
@@ -64,7 +91,41 @@ kubectl logs -l app=postgres
 
 ---
 
-## 🔌 Se connecter à PostgreSQL
+## � Tester la synchronisation ArgoCD
+
+Si vous utilisez ArgoCD, vous pouvez tester la synchronisation automatique :
+
+### 1. Modifier une ressource dans Git
+
+Par exemple, changez le nombre de replicas :
+
+```yaml
+# Dans k8s/postgres-deployment.yaml
+spec:
+  replicas: 2  # Changez de 1 à 2
+```
+
+Puis commit et push :
+```bash
+git add k8s/postgres-deployment.yaml
+git commit -m "Scale PostgreSQL to 2 replicas"
+git push
+```
+
+### 2. Observer ArgoCD
+
+- ArgoCD détecte le changement (max 3 minutes)
+- Il synchronise automatiquement le cluster
+- Vous verrez 2 pods PostgreSQL
+
+Pour forcer une synchronisation immédiate :
+```bash
+kubectl patch application postgres-demo -n argocd --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
+```
+
+---
+
+## �🔌 Se connecter à PostgreSQL
 
 ### Option 1 : Port-forward (recommandé pour tests locaux)
 
@@ -298,7 +359,8 @@ kubectl create secret generic postgres-secret \
   --from-literal=POSTGRES_DB=demo
 
 # Puis supprimer k8s/postgres-secret.yaml de Git
-```
+```argocd-app.yaml                # Configuration ArgoCD
+├── 
 
 ### 3. Changer le type de Service
 
