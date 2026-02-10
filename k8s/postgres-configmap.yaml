@@ -6,11 +6,7 @@ metadata:
     app: postgres
 data:
   init.sql: |
-    -- Créer la base de données demo
-    CREATE DATABASE demo;
-    
-    -- Se connecter à la base demo
-    \c demo;
+    -- Les tables sont créées dans la base 'demo' (définie par POSTGRES_DB)
     
     -- Table des utilisateurs
     CREATE TABLE users (
