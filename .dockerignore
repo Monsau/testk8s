@@ -1,0 +1,12 @@
+k8s/
+argocd/
+.git/
+.gitignore
+README.md
+POSTGRES.md
+*.md
+__pycache__/
+*.pyc
+.DS_Store
+venv/
+.venv/
