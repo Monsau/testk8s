@@ -3,19 +3,21 @@ kind: Application
 metadata:
   name: mssql-demo
   namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: sfda
 spec:
   project: default
   source:
-    repoURL: https://github.com/Monsau/testk8s.git
-    targetRevision: HEAD
+    repoURL: git@github.com:Monsau/testk8s.git
+    targetRevision: main
     path: k8s
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: sfda-db-mssql
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-      allowEmpty: false
     syncOptions:
-    - CreateNamespace=true
+      - CreateNamespace=true
+      - ServerSideApply=true
